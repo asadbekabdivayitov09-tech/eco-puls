@@ -45,6 +45,58 @@ DB_NAME      = 'bot_database.db'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
+# ================= ADMIN HANDLERS =================
+
+@bot.message_handler(commands=['admin'])
+def admin_menu(message):
+    uid = message.from_user.id
+    if uid in ADMIN_IDS:
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("📊 Stat", callback_data="adm_stats"),
+            InlineKeyboardButton("👥 Userlar", callback_data="adm_users"),
+            InlineKeyboardButton("📢 Reklama", callback_data="adm_broadcast"),
+            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="adm_settings")
+        )
+        bot.send_message(uid, "🛡️ *Admin Boshqaruv Paneli*", parse_mode='Markdown', reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('adm_'))
+def admin_calls(call):
+    uid = call.from_user.id
+    if uid not in ADMIN_IDS: return
+
+    if call.data == "adm_stats":
+        count = DB.run("SELECT COUNT(*) FROM users", fetchone=True)[0]
+        today = datetime.date.today().isoformat()
+        active = DB.run("SELECT COUNT(*) FROM users WHERE last_active_date=?", (today,), fetchone=True)[0]
+        
+        text = f"📊 *Bot statistikasi:*\n\n" \
+               f"👥 Jami foydalanuvchilar: `{count}`\n" \
+               f"🔥 Bugun faol: `{active}`"
+        bot.answer_callback_query(call.id)
+        bot.send_message(uid, text, parse_mode='Markdown')
+
+    elif call.data == "adm_broadcast":
+        msg = bot.send_message(uid, "📢 Reklama xabarini yuboring (Rasm, Video yoki Text):")
+        bot.register_next_step_handler(msg, start_broadcast)
+
+def start_broadcast(message):
+    uid = message.from_user.id
+    users = DB.run("SELECT chat_id FROM users", fetchall=True)
+    
+    bot.send_message(uid, f"🚀 Tarqatish boshlandi... ({len(users)} user)")
+    success = 0
+    blocked = 0
+    
+    for (user_id,) in users:
+        try:
+            bot.copy_message(user_id, message.chat.id, message.message_id)
+            success += 1
+        except Exception:
+            blocked += 1
+            
+    bot.send_message(uid, f"✅ Tugadi!\n🟢 Yetib bordi: {success}\n🔴 Blocklagan: {blocked}")
+
 # ================= DATABASE =================
 class DB:
     @staticmethod
