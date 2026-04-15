@@ -45,7 +45,7 @@ DB_NAME      = 'bot_database.db'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
-# ================= ADMIN HANDLERS =================
+# ================= ADMIN HANDLERS (OPTIMIZED) =================
 
 @bot.message_handler(commands=['admin'])
 def admin_menu(message):
@@ -54,9 +54,10 @@ def admin_menu(message):
         markup = InlineKeyboardMarkup(row_width=2)
         markup.add(
             InlineKeyboardButton("📊 Stat", callback_data="adm_stats"),
-            InlineKeyboardButton("👥 Userlar", callback_data="adm_users"),
+            InlineKeyboardButton("👥 Userlar", callback_data="adm_users_list"),
             InlineKeyboardButton("📢 Reklama", callback_data="adm_broadcast"),
-            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="adm_settings")
+            InlineKeyboardButton("🛡️ Adminlar", callback_data="adm_list_show"),
+            InlineKeyboardButton("📁 DB Yuklash", callback_data="adm_get_db")
         )
         bot.send_message(uid, "🛡️ *Admin Boshqaruv Paneli*", parse_mode='Markdown', reply_markup=markup)
 
@@ -65,37 +66,79 @@ def admin_calls(call):
     uid = call.from_user.id
     if uid not in ADMIN_IDS: return
 
+    # 1. Statistika
     if call.data == "adm_stats":
         count = DB.run("SELECT COUNT(*) FROM users", fetchone=True)[0]
         today = datetime.date.today().isoformat()
         active = DB.run("SELECT COUNT(*) FROM users WHERE last_active_date=?", (today,), fetchone=True)[0]
         
-        text = f"📊 *Bot statistikasi:*\n\n" \
-               f"👥 Jami foydalanuvchilar: `{count}`\n" \
-               f"🔥 Bugun faol: `{active}`"
+        text = (f"📊 *Bot statistikasi:*\n\n"
+                f"👥 Jami foydalanuvchilar: `{count}`\n"
+                f"🔥 Bugun faol: `{active}`")
         bot.answer_callback_query(call.id)
         bot.send_message(uid, text, parse_mode='Markdown')
 
+    # 2. Userlar ro'yxatini faylda olish
+    elif call.data == "adm_users_list":
+        bot.answer_callback_query(call.id, "Fayl tayyorlanmoqda...")
+        users = DB.run("SELECT chat_id, username, first_name FROM users", fetchall=True)
+        filename = "users_export.txt"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(f"USER LIST ({datetime.datetime.now()})\n\n")
+            for i, u in enumerate(users, 1):
+                f.write(f"{i}. ID: {u[0]} | @{u[1] if u[1] else 'N/A'} | {u[2]}\n")
+        
+        with open(filename, "rb") as doc:
+            bot.send_document(uid, doc, caption="👥 Jami foydalanuvchilar ro'yxati")
+        os.remove(filename)
+
+    # 3. Reklama tarqatish (Broadcast)
     elif call.data == "adm_broadcast":
-        msg = bot.send_message(uid, "📢 Reklama xabarini yuboring (Rasm, Video yoki Text):")
+        bot.answer_callback_query(call.id)
+        msg = bot.send_message(uid, "📢 *Reklama xabarini yuboring.*\n\n(Rasm, video yoki matn bo'lishi mumkin. Bekor qilish uchun /cancel deb yozing)", parse_mode='Markdown')
         bot.register_next_step_handler(msg, start_broadcast)
+
+    # 4. Adminlar ro'yxati (Meta-ma'lumotlar bilan)
+    elif call.data == "adm_list_show":
+        bot.answer_callback_query(call.id)
+        text = "🛡️ *Amaldagi Adminlar:*\n\n"
+        for aid, data in ADMIN_SINCE.items():
+            role, date = data
+            text += f"👤 ID: `{aid}`\n🏷️ Role: {role}\n📅 Since: {date}\n\n"
+        bot.send_message(uid, text, parse_mode='Markdown')
+
+    # 5. Ma'lumotlar bazasini yuklab olish
+    elif call.data == "adm_get_db":
+        bot.answer_callback_query(call.id)
+        if os.path.exists(DB_NAME):
+            with open(DB_NAME, "rb") as db_file:
+                bot.send_document(uid, db_file, caption="📁 SQLite Database Backup")
+
+# ================= BROADCAST LOGIC (ROBUST) =================
 
 def start_broadcast(message):
     uid = message.from_user.id
+    if message.text == '/cancel':
+        bot.send_message(uid, "❌ Bekor qilindi.")
+        return
+
     users = DB.run("SELECT chat_id FROM users", fetchall=True)
+    if not users: return
+
+    bot.send_message(uid, f"🚀 Reklama {len(users)} ta foydalanuvchiga yuborilmoqda...")
     
-    bot.send_message(uid, f"🚀 Tarqatish boshlandi... ({len(users)} user)")
-    success = 0
-    blocked = 0
-    
+    success, blocked = 0, 0
+    import time
+
     for (user_id,) in users:
         try:
             bot.copy_message(user_id, message.chat.id, message.message_id)
             success += 1
+            if success % 25 == 0: time.sleep(1) # Flood-limit oldini olish
         except Exception:
             blocked += 1
             
-    bot.send_message(uid, f"✅ Tugadi!\n🟢 Yetib bordi: {success}\n🔴 Blocklagan: {blocked}")
+    bot.send_message(uid, f"✅ *Reklama yakunlandi!*\n\n🟢 Yetib bordi: `{success}`\n🔴 Bloklagan: `{blocked}`", parse_mode='Markdown')
 
 # ================= DATABASE =================
 class DB:
