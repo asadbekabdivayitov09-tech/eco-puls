@@ -7,6 +7,8 @@ import requests
 import sqlite3
 import datetime
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import logging
 import random
 from contextlib import closing
@@ -22,18 +24,23 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
 
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-print("MY TOKEN IS:", TELEGRAM_TOKEN) # <--- ADD THIS LINE
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '8560769251:AAHZgnpdP-NcHGeJtS1seCpFdAglrFQf3eo')
+WAQI_TOKEN     = os.getenv('WAQI_TOKEN', 'YQC9C7VJ47YZQN39')
+OWM_TOKEN      = os.getenv('OWM_TOKEN', '9fba00318a9b96d91882f884100d2428')
 
-WAQI_TOKEN     = os.getenv('WAQI_TOKEN')       # https://aqicn.org/data-platform/token/
-OWM_TOKEN      = os.getenv('OWM_TOKEN')         # https://openweathermap.org/api
-
-# ⚠️  Replace 000000000 with YOUR real Telegram user ID
 MY_OWN_ID   = 7823754470
 FRIEND_ID   = 1239971862   # @Nishonov_Ulugbek
-ADMIN_IDS   = [MY_OWN_ID, FRIEND_ID]
+ADMIN_IDS   = [MY_OWN_ID, FRIEND_ID, 1186490471, 7871908619]
 
-LOG_GROUP_ID = -5197077622  # Your log group
+# Admin metadata: uid -> (display_role, since_date)
+ADMIN_SINCE = {
+    MY_OWN_ID:  ('Bot Owner 👑',       '2026-01-01'),
+    FRIEND_ID:  ('@Nishonov_Ulugbek', '2026-04-01'),
+    1186490471: ('Admin',              '2026-04-01'),
+    7871908619: ('Admin',              '2026-04-01'),
+}
+
+LOG_GROUP_ID = -5197077622
 DB_NAME      = 'bot_database.db'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
@@ -95,6 +102,16 @@ def get_or_create_user(user_obj, referrer_id=None):
                 bot.send_message(referrer_id, "🎉 A new friend joined via your link! You gained 1 referral.")
             except Exception as e:
                 logger.warning(f"Referral notify failed: {e}")
+        # Log new user to the Telegram group
+        try:
+            info = f"👤 {fname}" + (f" (@{username})" if username else "")
+            bot.send_message(
+                LOG_GROUP_ID,
+                f"🆕 *New User Joined!*\n{info}\nID: `{uid}`",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.warning(f"New user group log failed: {e}")
         return 'en', 0
     else:
         DB.run(
@@ -134,7 +151,7 @@ T = {
         'num_users_btn':  '👥 Number of Users',
         'active_btn':     '🔥 Active Users',
         'admin_btn':      '🛡️ Admin Panel',
-        'game_locked':    '🔒 Invite at least 1 friend to unlock the game! Go to Statistics → Share.',
+        'game_locked':    '🎮 *Game Locked!*\n\nAh, it looks like you haven\'t unlocked the game yet! 😔\nTo play, you just need to invite *1 friend* using your personal link.\n\nClick the share button below to get started! 🚀',
         'game_temp':      '🌡️ *Step 1/3 — Pick a Temperature (°C):*',
         'game_wind':      '💨 *Step 2/3 — Pick a Wind Speed (m/s):*',
         'game_hum':       '💧 *Step 3/3 — Pick a Humidity (%):*',
@@ -162,6 +179,20 @@ T = {
             'I read every message — bug reports, ideas, roasts, all welcome 😄\n'
             '━━━━━━━━━━━━━━━━━━━━'
         ),
+        'admins_btn':     '🛡️ Admins',
+        'adm_list_title': '🛡️ *Admin List*\n\n',
+        'adm_list_row':   '{medal} *{name}*{uname}\n   🏷️ {role} | 📅 Since {since} | 🎯 {inv} invites\n\n',
+        'btn_community':  '🌿 Join Community',
+        'community_post': (
+            '🌍 *Join Our Community!*\n\n'
+            'Breathe smarter. Live better.\n\n'
+            '🌱 We break down hard environmental concepts into simple, actionable plans — *together* 🤝\n\n'
+            '💡 Share ideas about green projects\n'
+            '📊 Get real-time pollution alerts\n'
+            '🔬 Understand air quality in plain language\n\n'
+            '*“Protect the air your kids will breathe.”*\n\n'
+            '👇 Tap below to join us — it takes 2 seconds:'
+        ),
         'no_data':        '⚠️ Could not fetch data. Please try again later.',
     },
     'ru': {
@@ -186,7 +217,7 @@ T = {
         'num_users_btn':  '👥 Число пользователей',
         'active_btn':     '🔥 Активные пользователи',
         'admin_btn':      '🛡️ Панель администратора',
-        'game_locked':    '🔒 Пригласите хотя бы 1 друга, чтобы разблокировать игру! Статистика → Поделиться.',
+        'game_locked':    '🎮 *Игра заблокирована!*\n\nОй, похоже, вы еще не разблокировали игру! 😔\nЧтобы играть, вам просто нужно пригласить *1 друга*, используя свою личную ссылку.\n\nНажмите кнопку ниже, чтобы начать! 🚀',
         'game_temp':      '🌡️ *Шаг 1/3 — Выберите температуру (°C):*',
         'game_wind':      '💨 *Шаг 2/3 — Выберите скорость ветра (м/с):*',
         'game_hum':       '💧 *Шаг 3/3 — Выберите влажность (%):*',
@@ -214,6 +245,20 @@ T = {
             'Читаю каждое сообщение — баги, идеи, всё принимается 😄\n'
             '━━━━━━━━━━━━━━━━━━━━'
         ),
+        'admins_btn':     '🛡️ Админы',
+        'adm_list_title': '🛡️ *Список админов*\n\n',
+        'adm_list_row':   '{medal} *{name}*{uname}\n   🏷️ {role} | 📅 С {since} | 🎯 {inv} пригл.\n\n',
+        'btn_community':  '🌿 Присоединиться',
+        'community_post': (
+            '🌍 *Присоединяйтесь к нашему сообществу!*\n\n'
+            'Дышите умнее. Живите лучше.\n\n'
+            '🌱 Мы превращаем сложные экологические концепции в простые планы — *вместе* 🤝\n\n'
+            '💡 Делитесь идеями о зелёных проектах\n'
+            '📊 Получайте оповещения о качестве воздуха\n'
+            '🔬 Понимайте поллюцию простым языком\n\n'
+            '*«Защищайте воздух, которым будут дышать ваши дети.»*\n\n'
+            '👇 Нажмите ниже, чтобы присоединиться:'
+        ),
         'no_data':        '⚠️ Не удалось получить данные. Попробуйте позже.',
     },
     'uz': {
@@ -238,7 +283,7 @@ T = {
         'num_users_btn':  "👥 Foydalanuvchilar soni",
         'active_btn':     '🔥 Faol foydalanuvchilar',
         'admin_btn':      '🛡️ Admin Panel',
-        'game_locked':    "🔒 O'yin ochish uchun kamida 1 do'stingizni taklif qiling! Statistika → Ulashish.",
+        'game_locked':    "🎮 *O'yin qulflangan!*\n\nVoy, o'yin hali siz uchun ochilmabdi-ku! 😔\nO'ynash uchun shaxsiy havolangiz orqali faqat *1 ta do'stingizni* taklif qilsangiz kifoya.\n\nBoshlash uchun pastdagi tugmani bosing! 🚀",
         'game_temp':      '🌡️ *1/3-qadam — Haroratni tanlang (°C):*',
         'game_wind':      '💨 *2/3-qadam — Shamol tezligini tanlang (m/s):*',
         'game_hum':       '💧 *3/3-qadam — Namlikni tanlang (%):*',
@@ -266,6 +311,20 @@ T = {
             "Har bir xabarni o'qiyman — xato, g'oya, hammasi qabul 😄\n"
             '━━━━━━━━━━━━━━━━━━━━'
         ),
+        'admins_btn':     '🛡️ Adminlar',
+        'adm_list_title': "🛡️ *Admin ro'yxati*\n\n",
+        'adm_list_row':   "{medal} *{name}*{uname}\n   🏷️ {role} | 📅 {since} dan | 🎯 {inv} taklif\n\n",
+        'btn_community':  "🌿 Hamjamiyatga qo'shiling",
+        'community_post': (
+            "🌍 *Bizning hamjamiyatga qo'shiling!*\n\n"
+            "Aqlli nafas oling. Yaxshiroq yashang.\n\n"
+            "🌱 Murakkab ekologik tushunchalarni oddiy planlarga aylantiramiz — *birgalikda* 🤝\n\n"
+            "💡 Yashil loyihalar haqida g'oyalar ulashing\n"
+            "📊 Havo sifati haqida real vaqtda ogohlantirishlar oling\n"
+            "🔬 Ifloslashishni oddiy tilda tushuning\n\n"
+            "*\"Kelajak avlod nafas oladigan havoni asrang.\"*\n\n"
+            "👇 Qo'shilish uchun quyidagi tugmani bosing — 2 soniya oladi:"
+        ),
         'no_data':        "⚠️ Ma'lumot olishda xato. Keyinroq urinib ko'ring.",
     }
 }
@@ -280,22 +339,162 @@ def back_btn(uid, cb):
 
 # ================= REGIONS =================
 REGIONS = {
-    'Tashkent City':    ['Yunusabad','Mirzo Ulugbek','Chilonzor','Yashnabad','Bektemir',
-                         'Yakkasaray','Mirobod','Uchtepa','Almazar','Shaykhontohur','Sergeli','Yangihayot'],
-    'Tashkent Region':  ['Angren','Buka','Chirchiq','Parkent','Zangiota','Kibray','Yangiyul','Nurafshon'],
-    'Andijan':          ['Andijan City','Asaka','Shahrixon','Xonobod',"Oltinko'l",'Buloqboshi'],
-    'Bukhara':          ['Bukhara City','Gijduvon','Jondor','Kogon','Peshku','Romitan','Shofirkon'],
-    'Jizzakh':          ['Jizzakh City','Arnasoy','Baxmal',"Do'stlik",'Forish',"G'allaorol",'Zomin'],
-    'Kashkadarya':      ['Karshi','Kason','Kitob','Muborak','Shakhrisabz','Guzar','Kamashi'],
-    'Navoi':            ['Navoi City','Khatyrchi','Kyzyltepa','Nurata','Uchkuduk','Zarafshan'],
-    'Namangan':         ['Namangan City','Chust','Kosonsoy','Pop','Turakurgan','Uychi','Davlatobod'],
-    'Samarkand':        ['Samarkand City','Bulungur','Ishtixan',"Kattaqo'rg'on",'Narpay','Pastdargom','Urgut','Toyloq'],
-    'Surkhandarya':     ['Termez','Boysun','Denov',"Jarqo'rg'on",'Kumqurghon','Sariosiyo','Sherobod'],
-    'Syrdarya':         ['Guliston','Sirdaryo','Yangiyer','Shirin','Oqoltin','Xavos'],
-    'Fergana':          ['Fergana City','Margilan','Kokand','Kuva','Rishton','Oltiariq','Beshariq'],
-    'Khorezm':          ['Urgench','Khiva','Gurlen',"Xonqa","Qo'shko'pir",'Shovot','Hazorasp'],
-    'Karakalpakstan':   ['Nukus','Amudaryo','Beruniy','Chimboy','Ellikqala','Kegeyli',"Qo'ng'irot","Mo'ynoq"]
+    'Tashkent City': ['Yunusabad', 'Mirzo Ulugbek', 'Chilonzor', 'Yashnabad', 'Bektemir', 'Yakkasaray', 'Mirobod', 'Uchtepa', 'Almazar', 'Shaykhontohur', 'Sergeli', 'Yangihayot'],
+    'Tashkent Region': ['Angren', 'Buka', 'Chirchiq', 'Parkent', 'Zangiota', 'Kibray', 'Yangiyul', 'Nurafshon'],
+    'Andijan': ['Andijan City', 'Asaka', 'Shahrixon', 'Xonobod', "Oltinko'l", 'Buloqboshi'],
+    'Bukhara': ['Bukhara City', 'Gijduvon', 'Jondor', 'Kogon', 'Peshku', 'Romitan', 'Shofirkon'],
+    'Jizzakh': ['Jizzakh City', 'Arnasoy', 'Baxmal', "Do'stlik", 'Forish', "G'allaorol", 'Zomin'],
+    'Kashkadarya': ['Karshi', 'Kason', 'Kitob', 'Muborak', 'Shakhrisabz', 'Guzar', 'Kamashi'],
+    'Navoi': ['Navoi City', 'Khatyrchi', 'Kyzyltepa', 'Nurata', 'Uchkuduk', 'Zarafshan'],
+    'Namangan': ['Namangan City', 'Chust', 'Kosonsoy', 'Pop', 'Turakurgan', 'Uychi', 'Davlatobod'],
+    'Samarkand': ['Samarkand City', 'Bulungur', 'Ishtixan', "Kattaqo'rg'on", 'Narpay', 'Pastdargom', 'Urgut', 'Toyloq'],
+    'Surkhandarya': ['Termez', 'Boysun', 'Denov', "Jarqo'rg'on", 'Kumqurghon', 'Sariosiyo', 'Sherobod'],
+    'Syrdarya': ['Guliston', 'Sirdaryo', 'Yangiyer', 'Shirin', 'Oqoltin', 'Xavos'],
+    'Fergana': ['Fergana City', 'Margilan', 'Kokand', 'Kuva', 'Rishton', 'Oltiariq', 'Beshariq'],
+    'Khorezm': ['Urgench', 'Khiva', 'Gurlen', "Xonqa", "Qo'shko'pir", 'Shovot', 'Hazorasp'],
+    'Karakalpakstan': ['Nukus', 'Amudaryo', 'Beruniy', 'Chimboy', 'Ellikqala', 'Kegeyli', "Qo'ng'irot", "Mo'ynoq"]
 }
+
+# ================= LOCATION NAME TRANSLATIONS =================
+LOCATION_NAMES = {
+    # ── Regions ──────────────────────────────────────────────────────────
+    'Tashkent City':    {'en': 'Tashkent City',    'uz': 'Toshkent shahri',       'ru': 'г. Ташкент'},
+    'Tashkent Region':  {'en': 'Tashkent Region',  'uz': 'Toshkent viloyati',     'ru': 'Ташкентская область'},
+    'Andijan':          {'en': 'Andijan',           'uz': 'Andijon viloyati',      'ru': 'Андижанская область'},
+    'Bukhara':          {'en': 'Bukhara',           'uz': 'Buxoro viloyati',       'ru': 'Бухарская область'},
+    'Jizzakh':          {'en': 'Jizzakh',           'uz': 'Jizzax viloyati',       'ru': 'Джизакская область'},
+    'Kashkadarya':      {'en': 'Kashkadarya',       'uz': 'Qashqadaryo viloyati',  'ru': 'Кашкадарьинская область'},
+    'Navoi':            {'en': 'Navoi',             'uz': 'Navoiy viloyati',       'ru': 'Навоийская область'},
+    'Namangan':         {'en': 'Namangan',          'uz': 'Namangan viloyati',     'ru': 'Наманганская область'},
+    'Samarkand':        {'en': 'Samarkand',         'uz': 'Samarqand viloyati',    'ru': 'Самаркандская область'},
+    'Surkhandarya':     {'en': 'Surkhandarya',      'uz': 'Surxondaryo viloyati',  'ru': 'Сурхандарьинская область'},
+    'Syrdarya':         {'en': 'Syrdarya',          'uz': 'Sirdaryo viloyati',     'ru': 'Сырдарьинская область'},
+    'Fergana':          {'en': 'Fergana',           'uz': "Farg'ona viloyati",     'ru': 'Ферганская область'},
+    'Khorezm':          {'en': 'Khorezm',           'uz': 'Xorazm viloyati',       'ru': 'Хорезмская область'},
+    'Karakalpakstan':   {'en': 'Karakalpakstan',    'uz': "Qoraqalpog'iston Res.", 'ru': 'Респ. Каракалпакстан'},
+    # ── Tashkent City ────────────────────────────────────────────────────
+    'Yunusabad':        {'en': 'Yunusabad',     'uz': 'Yunusobod',       'ru': 'Юнусабад'},
+    'Mirzo Ulugbek':    {'en': 'Mirzo Ulugbek', 'uz': "Mirzo Ulug'bek", 'ru': 'Мирзо-Улугбек'},
+    'Chilonzor':        {'en': 'Chilonzor',     'uz': 'Chilonzor',       'ru': 'Чиланзар'},
+    'Yashnabad':        {'en': 'Yashnabad',     'uz': 'Yashnobod',       'ru': 'Яшнабад'},
+    'Bektemir':         {'en': 'Bektemir',      'uz': 'Bektemir',        'ru': 'Бектемир'},
+    'Yakkasaray':       {'en': 'Yakkasaray',    'uz': 'Yakkasaroy',      'ru': 'Яккасарай'},
+    'Mirobod':          {'en': 'Mirobod',       'uz': 'Mirobod',         'ru': 'Мирабад'},
+    'Uchtepa':          {'en': 'Uchtepa',       'uz': 'Uchtepa',         'ru': 'Учтепа'},
+    'Almazar':          {'en': 'Almazar',       'uz': 'Olmazor',         'ru': 'Алмазар'},
+    'Shaykhontohur':    {'en': 'Shaykhontohur', 'uz': 'Shayxontohur',    'ru': 'Шайхантахур'},
+    'Sergeli':          {'en': 'Sergeli',       'uz': "Sirg'ali",        'ru': 'Сергели'},
+    'Yangihayot':       {'en': 'Yangihayot',    'uz': 'Yangihayot',      'ru': 'Янгихаёт'},
+    # ── Tashkent Region ──────────────────────────────────────────────────
+    'Angren':           {'en': 'Angren',    'uz': 'Angren',       'ru': 'Ангрен'},
+    'Buka':             {'en': 'Buka',      'uz': "Bo'ka",        'ru': 'Бука'},
+    'Chirchiq':         {'en': 'Chirchiq',  'uz': 'Chirchiq',     'ru': 'Чирчик'},
+    'Parkent':          {'en': 'Parkent',   'uz': 'Parkent',      'ru': 'Паркент'},
+    'Zangiota':         {'en': 'Zangiota',  'uz': 'Zangiota',     'ru': 'Зангиата'},
+    'Kibray':           {'en': 'Kibray',    'uz': 'Qibray',       'ru': 'Кибрай'},
+    'Yangiyul':         {'en': 'Yangiyul',  'uz': "Yangiyo'l",   'ru': 'Янгиюль'},
+    'Nurafshon':        {'en': 'Nurafshon', 'uz': 'Nurafshon',    'ru': 'Нурафшан'},
+    # ── Andijan ──────────────────────────────────────────────────────────
+    'Andijan City':     {'en': 'Andijan City', 'uz': 'Andijon shahri', 'ru': 'г. Андижан'},
+    'Asaka':            {'en': 'Asaka',         'uz': 'Asaka',          'ru': 'Асака'},
+    'Shahrixon':        {'en': 'Shahrixon',     'uz': 'Shahrixon',      'ru': 'Шахрихан'},
+    'Xonobod':          {'en': 'Xonobod',       'uz': 'Xonobod',        'ru': 'Ханабад'},
+    "Oltinko'l":        {'en': "Oltinko'l",     'uz': "Oltinko'l",      'ru': 'Алтынкуль'},
+    'Buloqboshi':       {'en': 'Buloqboshi',    'uz': 'Buloqboshi',     'ru': 'Булакбаши'},
+    # ── Bukhara ──────────────────────────────────────────────────────────
+    'Bukhara City':     {'en': 'Bukhara City', 'uz': 'Buxoro shahri',  'ru': 'г. Бухара'},
+    'Gijduvon':         {'en': 'Gijduvon',     'uz': "G'ijduvon",      'ru': 'Гиждуван'},
+    'Jondor':           {'en': 'Jondor',       'uz': 'Jondor',         'ru': 'Жондор'},
+    'Kogon':            {'en': 'Kogon',         'uz': 'Kogon',          'ru': 'Каган'},
+    'Peshku':           {'en': 'Peshku',        'uz': 'Peshku',         'ru': 'Пешку'},
+    'Romitan':          {'en': 'Romitan',       'uz': 'Romitan',        'ru': 'Ромитан'},
+    'Shofirkon':        {'en': 'Shofirkon',     'uz': 'Shofirkon',      'ru': 'Шофиркан'},
+    # ── Jizzakh ──────────────────────────────────────────────────────────
+    'Jizzakh City':     {'en': 'Jizzakh City', 'uz': 'Jizzax shahri', 'ru': 'г. Джизак'},
+    'Arnasoy':          {'en': 'Arnasoy',       'uz': 'Arnasoy',       'ru': 'Арнасай'},
+    'Baxmal':           {'en': 'Baxmal',        'uz': 'Baxmal',        'ru': 'Бахмал'},
+    "Do'stlik":         {'en': "Do'stlik",      'uz': "Do'stlik",      'ru': 'Дустлик'},
+    'Forish':           {'en': 'Forish',        'uz': 'Forish',        'ru': 'Фариш'},
+    "G'allaorol":       {'en': "G'allaorol",    'uz': "G'allaorol",    'ru': 'Галляарал'},
+    'Zomin':            {'en': 'Zomin',         'uz': 'Zomin',         'ru': 'Заамин'},
+    # ── Kashkadarya ──────────────────────────────────────────────────────
+    'Karshi':           {'en': 'Karshi',       'uz': 'Qarshi',     'ru': 'Карши'},
+    'Kason':            {'en': 'Kason',        'uz': 'Koson',      'ru': 'Касан'},
+    'Kitob':            {'en': 'Kitob',        'uz': 'Kitob',      'ru': 'Китаб'},
+    'Muborak':          {'en': 'Muborak',      'uz': 'Muborak',    'ru': 'Мубарек'},
+    'Shakhrisabz':      {'en': 'Shakhrisabz', 'uz': 'Shahrisabz', 'ru': 'Шахрисабз'},
+    'Guzar':            {'en': 'Guzar',        'uz': "G'uzor",     'ru': 'Гузар'},
+    'Kamashi':          {'en': 'Kamashi',      'uz': 'Qamashi',    'ru': 'Камаши'},
+    # ── Navoi ────────────────────────────────────────────────────────────
+    'Navoi City':       {'en': 'Navoi City',  'uz': 'Navoiy shahri', 'ru': 'г. Навои'},
+    'Khatyrchi':        {'en': 'Khatyrchi',   'uz': 'Xatirchi',      'ru': 'Хатырчи'},
+    'Kyzyltepa':        {'en': 'Kyzyltepa',   'uz': 'Qiziltepa',     'ru': 'Кызылтепа'},
+    'Nurata':           {'en': 'Nurata',       'uz': 'Nurota',        'ru': 'Нурата'},
+    'Uchkuduk':         {'en': 'Uchkuduk',    'uz': 'Uchquduq',      'ru': 'Учкудук'},
+    'Zarafshan':        {'en': 'Zarafshan',    'uz': 'Zarafshon',     'ru': 'Зарафшан'},
+    # ── Namangan ─────────────────────────────────────────────────────────
+    'Namangan City':    {'en': 'Namangan City', 'uz': 'Namangan shahri',   'ru': 'г. Наманган'},
+    'Chust':            {'en': 'Chust',          'uz': 'Chust',             'ru': 'Чуст'},
+    'Kosonsoy':         {'en': 'Kosonsoy',       'uz': 'Kosonsoy',          'ru': 'Касансай'},
+    'Pop':              {'en': 'Pop',            'uz': 'Pop',               'ru': 'Пап'},
+    'Turakurgan':       {'en': 'Turakurgan',     'uz': "To'raqo'rg'on",    'ru': 'Туракурган'},
+    'Uychi':            {'en': 'Uychi',          'uz': 'Uychi',             'ru': 'Уйчи'},
+    'Davlatobod':       {'en': 'Davlatobod',     'uz': 'Davlatobod',        'ru': 'Давлатабад'},
+    # ── Samarkand ────────────────────────────────────────────────────────
+    'Samarkand City':   {'en': 'Samarkand City', 'uz': 'Samarqand shahri', 'ru': 'г. Самарканд'},
+    'Bulungur':         {'en': 'Bulungur',        'uz': "Bulung'ur",        'ru': 'Булунгур'},
+    'Ishtixan':         {'en': 'Ishtixan',        'uz': 'Ishtixon',         'ru': 'Иштихан'},
+    "Kattaqo'rg'on":    {'en': "Kattaqo'rg'on",  'uz': "Kattaqo'rg'on",   'ru': 'Каттакурган'},
+    'Narpay':           {'en': 'Narpay',          'uz': 'Narpay',           'ru': 'Нарпай'},
+    'Pastdargom':       {'en': 'Pastdargom',      'uz': "Pastdarg'om",      'ru': 'Пастдаргом'},
+    'Urgut':            {'en': 'Urgut',           'uz': 'Urgut',            'ru': 'Ургут'},
+    'Toyloq':           {'en': 'Toyloq',          'uz': 'Toyloq',           'ru': 'Тайлак'},
+    # ── Surkhandarya ─────────────────────────────────────────────────────
+    'Termez':           {'en': 'Termez',      'uz': 'Termiz',       'ru': 'Термез'},
+    'Boysun':           {'en': 'Boysun',      'uz': 'Boysun',       'ru': 'Байсун'},
+    'Denov':            {'en': 'Denov',       'uz': 'Denov',        'ru': 'Денау'},
+    "Jarqo'rg'on":      {'en': "Jarqo'rg'on", 'uz': "Jarqo'rg'on", 'ru': 'Джаркурган'},
+    'Kumqurghon':       {'en': 'Kumqurghon',  'uz': "Qumqo'rg'on", 'ru': 'Кумкурган'},
+    'Sariosiyo':        {'en': 'Sariosiyo',   'uz': 'Sariosiyo',    'ru': 'Сариасия'},
+    'Sherobod':         {'en': 'Sherobod',    'uz': 'Sherobod',     'ru': 'Шерабад'},
+    # ── Syrdarya ─────────────────────────────────────────────────────────
+    'Guliston':         {'en': 'Guliston', 'uz': 'Guliston', 'ru': 'Гулистан'},
+    'Sirdaryo':         {'en': 'Sirdaryo', 'uz': 'Sirdaryo', 'ru': 'Сырдарья'},
+    'Yangiyer':         {'en': 'Yangiyer', 'uz': 'Yangiyer', 'ru': 'Янгиер'},
+    'Shirin':           {'en': 'Shirin',   'uz': 'Shirin',   'ru': 'Ширин'},
+    'Oqoltin':          {'en': 'Oqoltin',  'uz': 'Oqoltin',  'ru': 'Акалтын'},
+    'Xavos':            {'en': 'Xavos',    'uz': 'Xavos',    'ru': 'Хаваст'},
+    # ── Fergana ──────────────────────────────────────────────────────────
+    'Fergana City':     {'en': 'Fergana City', 'uz': "Farg'ona shahri", 'ru': 'г. Фергана'},
+    'Margilan':         {'en': 'Margilan',      'uz': "Marg'ilon",      'ru': 'Маргилан'},
+    'Kokand':           {'en': 'Kokand',        'uz': "Qo'qon",         'ru': 'Коканд'},
+    'Kuva':             {'en': 'Kuva',          'uz': 'Quva',           'ru': 'Кува'},
+    'Rishton':          {'en': 'Rishton',       'uz': 'Rishton',        'ru': 'Риштан'},
+    'Oltiariq':         {'en': 'Oltiariq',      'uz': 'Oltiariq',       'ru': 'Алтыарык'},
+    'Beshariq':         {'en': 'Beshariq',      'uz': 'Beshariq',       'ru': 'Бешарык'},
+    # ── Khorezm ──────────────────────────────────────────────────────────
+    'Urgench':          {'en': 'Urgench',       'uz': 'Urganch',       'ru': 'Ургенч'},
+    'Khiva':            {'en': 'Khiva',         'uz': 'Xiva',          'ru': 'Хива'},
+    'Gurlen':           {'en': 'Gurlen',        'uz': 'Gurlan',        'ru': 'Гурлен'},
+    'Xonqa':            {'en': 'Xonqa',         'uz': 'Xonqa',         'ru': 'Ханка'},
+    "Qo'shko'pir":     {'en': "Qo'shko'pir",  'uz': "Qo'shko'pir",   'ru': 'Кошкупыр'},
+    'Shovot':           {'en': 'Shovot',        'uz': 'Shovot',        'ru': 'Шават'},
+    'Hazorasp':         {'en': 'Hazorasp',      'uz': 'Xazorasp',      'ru': 'Хазарасп'},
+    # ── Karakalpakstan ───────────────────────────────────────────────────
+    'Nukus':            {'en': 'Nukus',        'uz': 'Nukus',        'ru': 'Нукус'},
+    'Amudaryo':         {'en': 'Amudaryo',     'uz': 'Amudaryo',     'ru': 'Амударья'},
+    'Beruniy':          {'en': 'Beruniy',      'uz': 'Beruniy',      'ru': 'Беруни'},
+    'Chimboy':          {'en': 'Chimboy',      'uz': 'Chimboy',      'ru': 'Чимбай'},
+    'Ellikqala':        {'en': 'Ellikqala',    'uz': "Ellikqal'a",   'ru': 'Элликкала'},
+    'Kegeyli':          {'en': 'Kegeyli',      'uz': 'Kegeyli',      'ru': 'Кегейли'},
+    "Qo'ng'irot":       {'en': "Qo'ng'irot",   'uz': "Qo'ng'irot",   'ru': 'Кунград'},
+    "Mo'ynoq":          {'en': "Mo'ynoq",      'uz': "Mo'ynoq",      'ru': 'Муйнак'},
+}
+
+def loc_t(english_key, uid):
+    """Returns the localized name for a region/district key without changing the API key."""
+    lang = get_lang(uid)
+    return LOCATION_NAMES.get(english_key, {}).get(lang, english_key)
 
 # ================= WEATHER API =================
 def geocode(query):
@@ -329,25 +528,27 @@ def fetch_current(lat, lon):
     return {'temp': temp, 'hum': hum, 'wind': wind, 'aqi': aqi, 'desc': desc}
 
 def _get_aqi(lat, lon):
+    """Returns real AQI integer, or None if unavailable."""
     try:
         r = requests.get(
             f"https://api.waqi.info/feed/geo:{lat};{lon}/?token={WAQI_TOKEN}", timeout=6
         ).json()
         if r.get('status') == 'ok':
-            return int(r['data']['aqi'])
-        raise ValueError("WAQI non-ok")
+            val = r['data']['aqi']
+            if isinstance(val, (int, float)) and val > 0:
+                return int(val)
     except Exception:
         pass
-    # OWM AQI fallback — maps 1-5 to real AQI midpoints
+    # OWM AQI fallback — US EPA AQI scale midpoints for index 1-5
     try:
         r = requests.get(
             f"http://api.openweathermap.org/data/2.5/air_pollution"
             f"?lat={lat}&lon={lon}&appid={OWM_TOKEN}", timeout=6
         ).json()
         idx = r['list'][0]['main']['aqi']
-        return {1: 20, 2: 75, 3: 115, 4: 165, 5: 250}.get(idx, 50)
+        return {1: 25, 2: 75, 3: 125, 4: 175, 5: 275}.get(idx)
     except Exception:
-        return 50
+        return None
 
 def fetch_hourly_forecast(lat, lon, day_offset=0):
     """
@@ -532,8 +733,10 @@ def get_advice(lang, temp, aqi):
 # ================= WEATHER POST BUILDER =================
 def build_weather_post(name, data, lang, lat=None, lon=None, uid=None):
     """Builds the full professional weather message."""
-    level = aqi_level(data['aqi'], lang)
-    advice = get_advice(lang, data['temp'], data['aqi'])
+    aqi     = data.get('aqi')
+    level   = aqi_level(aqi, lang) if aqi is not None else '—'
+    aqi_str = str(aqi) if aqi is not None else 'N/A'
+    advice  = get_advice(lang, data['temp'], aqi if aqi is not None else 50)
 
     if lang == 'ru':
         post = (
@@ -543,7 +746,7 @@ def build_weather_post(name, data, lang, lat=None, lon=None, uid=None):
             f"🌡️  Температура:  *{data['temp']}°C*\n"
             f"💧  Влажность:    *{data['hum']}%*\n"
             f"💨  Ветер:        *{data['wind']} м/с*\n"
-            f"😷  AQI:          *{data['aqi']}* — {level}\n"
+            f"😷  AQI:          *{aqi_str}* — {level}\n"
             f"☁️  Погода:       _{data['desc']}_\n\n"
             f"💡 *Совет:* {advice}"
         )
@@ -555,7 +758,7 @@ def build_weather_post(name, data, lang, lat=None, lon=None, uid=None):
             f"🌡️  Harorat:   *{data['temp']}°C*\n"
             f"💧  Namlik:    *{data['hum']}%*\n"
             f"💨  Shamol:    *{data['wind']} m/s*\n"
-            f"😷  AQI:       *{data['aqi']}* — {level}\n"
+            f"😷  AQI:       *{aqi_str}* — {level}\n"
             f"☁️  Ob-havo:   _{data['desc']}_\n\n"
             f"💡 *Maslahat:* {advice}"
         )
@@ -567,7 +770,7 @@ def build_weather_post(name, data, lang, lat=None, lon=None, uid=None):
             f"🌡️  Temperature:  *{data['temp']}°C*\n"
             f"💧  Humidity:     *{data['hum']}%*\n"
             f"💨  Wind Speed:   *{data['wind']} m/s*\n"
-            f"😷  AQI:          *{data['aqi']}* — {level}\n"
+            f"😷  AQI:          *{aqi_str}* — {level}\n"
             f"☁️  Condition:    _{data['desc']}_\n\n"
             f"💡 *Advice:* {advice}"
         )
@@ -627,10 +830,11 @@ def cb_setlang(call):
 
 def send_main_menu(uid, mid=None):
     mk = InlineKeyboardMarkup(row_width=2)
-    mk.add(InlineKeyboardButton(t(uid,'btn_geo'),    callback_data='nav_geo'))
-    mk.add(InlineKeyboardButton(t(uid,'btn_region'), callback_data='nav_region'),
-           InlineKeyboardButton(t(uid,'btn_game'),   callback_data='nav_game'))
-    mk.add(InlineKeyboardButton(t(uid,'btn_stat'),   callback_data='nav_stat'))
+    mk.add(InlineKeyboardButton(t(uid,'btn_geo'),       callback_data='nav_geo'))
+    mk.add(InlineKeyboardButton(t(uid,'btn_region'),    callback_data='nav_region'),
+           InlineKeyboardButton(t(uid,'btn_game'),      callback_data='nav_game'))
+    mk.add(InlineKeyboardButton(t(uid,'btn_stat'),      callback_data='nav_stat'))
+    mk.add(InlineKeyboardButton(t(uid,'btn_community'), callback_data='nav_community'))
     text = t(uid, 'main_menu')
     if mid:
         try:
@@ -658,9 +862,11 @@ def cb_nav(call):
         bot.send_message(uid, t(uid, 'geo_req'), reply_markup=mk)
 
     elif dest == 'region':
+        lang = get_lang(uid)
         mk = InlineKeyboardMarkup(row_width=2)
         for reg in REGIONS:
-            mk.add(InlineKeyboardButton(reg, callback_data=f'region_{reg}'))
+            label = LOCATION_NAMES.get(reg, {}).get(lang, reg)
+            mk.add(InlineKeyboardButton(label, callback_data=f'region_{reg}'))
         mk.add(back_btn(uid, 'nav_main'))
         bot.edit_message_text(
             t(uid, 'choose_region'), uid, mid,
@@ -670,7 +876,10 @@ def cb_nav(call):
     elif dest == 'game':
         _, inv = get_or_create_user(call.from_user)
         if inv < 1:
-            bot.answer_callback_query(call.id, t(uid, 'game_locked'), show_alert=True)
+            mk = InlineKeyboardMarkup(row_width=1)
+            mk.add(InlineKeyboardButton(t(uid, 'share_btn'), callback_data='stat_share'))
+            mk.add(back_btn(uid, 'nav_main'))
+            bot.edit_message_text(t(uid, 'game_locked'), uid, mid, parse_mode='Markdown', reply_markup=mk)
             return
         _show_game_temp(uid, mid)
 
@@ -682,12 +891,27 @@ def cb_nav(call):
         mk.add(InlineKeyboardButton(t(uid,'add_group_btn'), url=_bot_group_url()))
         mk.add(InlineKeyboardButton(t(uid,'feedback_btn'),  callback_data='stat_feedback'))
         if uid in ADMIN_IDS:
-            mk.add(InlineKeyboardButton(t(uid,'num_users_btn'),  callback_data='adm_allusers'))
-            mk.add(InlineKeyboardButton(t(uid,'active_btn'),     callback_data='adm_active'))
+            mk.add(InlineKeyboardButton(t(uid,'num_users_btn'), callback_data='adm_allusers'))
+            mk.add(InlineKeyboardButton(t(uid,'active_btn'),    callback_data='adm_active'))
+            mk.add(InlineKeyboardButton(t(uid,'admins_btn'),    callback_data='adm_admins'))
         mk.add(back_btn(uid, 'nav_main'))
         bot.edit_message_text(
             t(uid,'stat_menu', inv=inv), uid, mid,
             parse_mode='Markdown', reply_markup=mk
+        )
+
+    elif dest == 'community':
+        lang = get_lang(uid)
+        mk = InlineKeyboardMarkup(row_width=1)
+        mk.add(InlineKeyboardButton(
+            '🌍 Join Channel ➔',
+            url='https://t.me/Eco_Pulse_AQI'
+        ))
+        mk.add(back_btn(uid, 'nav_main'))
+        bot.edit_message_text(
+            T[lang]['community_post'], uid, mid,
+            parse_mode='Markdown', reply_markup=mk,
+            disable_web_page_preview=True
         )
 
 def _bot_group_url():
@@ -889,6 +1113,10 @@ def cb_game_hum(call):
     )
 
 # ---------- STATS ----------
+def escape_md(text):
+    if not text: return ""
+    return str(text).replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
+
 @bot.callback_query_handler(func=lambda c: c.data.startswith('stat_'))
 def cb_stat(call):
     uid, mid = call.message.chat.id, call.message.message_id
@@ -909,8 +1137,24 @@ def cb_stat(call):
             if row[0] == uid: my_rank = i + 1
             if i < 10:
                 medal  = medals[min(i, len(medals)-1)]
-                name   = row[1] or "User"
-                uname  = f"(@{row[2]}) " if row[2] else ""
+                c_id   = row[0]
+                d_name = row[1]
+                d_user = row[2]
+                
+                # Fetch dynamically if missing
+                if not d_name:
+                    try:
+                        chat = bot.get_chat(c_id)
+                        d_name = chat.first_name or chat.title or ""
+                        d_user = chat.username or ""
+                        if d_name or d_user:
+                            DB.run("UPDATE users SET first_name=?, username=? WHERE chat_id=?", (d_name, d_user, c_id), commit=True)
+                    except Exception:
+                        pass
+                
+                name_val = d_name or d_user or str(c_id)
+                name   = escape_md(name_val)
+                uname  = f"(@{escape_md(d_user)}) " if d_name and d_user else ""
                 text  += T[lang]['top_row'].format(medal=medal, name=name, uname=uname, inv=row[3])
         text += T[lang]['top_footer'].format(rank=my_rank, inv=my_inv)
         mk = InlineKeyboardMarkup().add(back_btn(uid,'nav_stat'))
@@ -942,21 +1186,37 @@ def cb_stat(call):
 @bot.callback_query_handler(func=lambda c: c.data.startswith('adm_'))
 def cb_admin(call):
     uid, mid = call.message.chat.id, call.message.message_id
+    action   = call.data[4:]
+
+    # All adm_ actions are admin-only
     if uid not in ADMIN_IDS:
-        bot.answer_callback_query(call.id, "⛔ Access Denied.", show_alert=True)
+        bot.answer_callback_query(call.id, "⛔ Admins only.", show_alert=True)
         return
-    action = call.data[4:]
+
     bot.answer_callback_query(call.id)
 
     today = datetime.date.today().isoformat()
+    lang  = get_lang(uid)
+
     if action == 'allusers':
         rows = DB.run("SELECT chat_id,first_name,username FROM users ORDER BY rowid DESC", fetchall=True) or []
         text = f"👥 *Total Users: {len(rows)}*\n\n"
         for r in rows[:80]:
-            nm = r[1] or "User"
-            un = f"(@{r[2]})" if r[2] else ""
-            text += f"• {nm} {un} — `{r[0]}`\n"
-        mk = InlineKeyboardMarkup().add(back_btn(uid,'nav_stat'))
+            c_id, d_name, d_user = r[0], r[1], r[2]
+            if not d_name:
+                try:
+                    chat = bot.get_chat(c_id)
+                    d_name = chat.first_name or chat.title or ""
+                    d_user = chat.username or ""
+                    if d_name or d_user:
+                        DB.run("UPDATE users SET first_name=?, username=? WHERE chat_id=?", (d_name, d_user, c_id), commit=True)
+                except Exception:
+                    pass
+            name_val = d_name or d_user or str(c_id)
+            nm = escape_md(name_val)
+            un = f" (@{escape_md(d_user)})" if d_name and d_user else ""
+            text += f"• {nm}{un} — `{c_id}`\n"
+        mk = InlineKeyboardMarkup().add(back_btn(uid, 'nav_stat'))
         bot.edit_message_text(text, uid, mid, parse_mode='Markdown', reply_markup=mk)
 
     elif action == 'active':
@@ -966,10 +1226,45 @@ def cb_admin(call):
         ) or []
         text = f"🔥 *Active Today ({today}): {len(rows)}*\n\n"
         for r in rows[:80]:
-            nm = r[1] or "User"
-            un = f"(@{r[2]})" if r[2] else ""
-            text += f"• {nm} {un} — `{r[0]}`\n"
-        mk = InlineKeyboardMarkup().add(back_btn(uid,'nav_stat'))
+            nm = escape_md(r[1] or "User")
+            un = f" (@{escape_md(r[2])})" if r[2] else ""
+            text += f"• {nm}{un} — `{r[0]}`\n"
+        mk = InlineKeyboardMarkup().add(back_btn(uid, 'nav_stat'))
+        bot.edit_message_text(text, uid, mid, parse_mode='Markdown', reply_markup=mk)
+
+    elif action == 'admins':
+        # Fetch admin data from DB; fall back to ADMIN_SINCE for those not in DB yet
+        medals = ['👑', '🥈', '🥉', '🏅', '🎖️']
+        title  = T[lang].get('adm_list_title', '🛡️ *Admin List*\n\n')
+        row_t  = T[lang].get('adm_list_row',
+                              '{medal} *{name}*{uname}\n   🏷️ {role} | 📅 Since {since} | 🎯 {inv} invites\n\n')
+        text   = title
+        for i, a_id in enumerate(ADMIN_IDS):
+            medal = medals[min(i, len(medals)-1)]
+            role, since = ADMIN_SINCE.get(a_id, ('Admin', 'Unknown'))
+            # Try to get fresh data from DB
+            row = DB.run(
+                "SELECT first_name, username, referrals FROM users WHERE chat_id=?",
+                (a_id,), fetchone=True
+            )
+            if row:
+                d_name, d_user, inv = row[0], row[1], row[2]
+            else:
+                d_name, d_user, inv = "", "", 0
+            # Try live fetch if name missing
+            if not d_name:
+                try:
+                    chat   = bot.get_chat(a_id)
+                    d_name = chat.first_name or chat.title or ""
+                    d_user = d_user or chat.username or ""
+                except Exception:
+                    pass
+            name_val = d_name or d_user or str(a_id)
+            nm    = escape_md(name_val)
+            uname = f" (@{escape_md(d_user)})" if d_user and d_name else ""
+            text += row_t.format(medal=medal, name=nm, uname=uname,
+                                 role=role, since=since, inv=inv)
+        mk = InlineKeyboardMarkup().add(back_btn(uid, 'nav_stat'))
         bot.edit_message_text(text, uid, mid, parse_mode='Markdown', reply_markup=mk)
 
 # ================= RUN =================
